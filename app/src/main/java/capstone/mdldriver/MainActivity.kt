@@ -3,6 +3,7 @@ package capstone.mdldriver
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -16,26 +17,37 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.LatLng
 import okhttp3.HttpUrl
 import android.support.v4.app.ActivityCompat
+import android.support.v4.app.ActivityCompat.*
 import android.support.v4.app.FragmentActivity
 import android.support.v4.content.ContextCompat
+import android.support.v4.content.ContextCompat.checkSelfPermission
+import android.support.v7.app.AlertDialog
+import android.support.v7.widget.RecyclerView
+import android.view.LayoutInflater
+import android.view.ViewGroup
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
-import kotlinx.android.synthetic.main.activity_main.textView1
+import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONObject
 import java.io.IOException
 
+private const val TAG = "MainActivity"
+private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
 
 class MainActivity : FragmentActivity(), OnMapReadyCallback {
 
     private val baseUrl: HttpUrl =  HttpUrl.get("http://jl-m.org:8000/")
     private var map: GoogleMap? = null
     private var latLng: LatLng? = null
+    private var riders: List<Rider> = emptyList()
+    private lateinit var adapter: RidersRecyclerViewAdapter
 
     companion object {
         fun intent(context: Context)= Intent(context, MainActivity::class.java) //TODO: maybe take in drivers id?
@@ -55,9 +67,11 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback {
         val request: Request = Request.Builder().url(url).build()
         val handler = Handler(Looper.getMainLooper())
 
+        adapter = RidersRecyclerViewAdapter(riders)
+        ridersRecyclerView.adapter = adapter
         httpClient.newCall(request).enqueue( object: Callback {
             override fun onFailure(call: Call?, e: IOException?) {
-                Log.e("YO", "fail")
+                Log.e(TAG, "call failure")
                 handler.post { //UI manipulation must be ran on Main thread
                     //TODO error
                 }
@@ -65,10 +79,33 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback {
             }
 
             override fun onResponse(call: Call?, response: Response?) {
-                Log.e("YO", response!!.body()!!.source().readUtf8())
+                val jsonString = response!!.body()!!.string().toString()
+                Log.e(TAG, "string" + jsonString)
+                val jsonObject = JSONObject(jsonString)
+                Log.e(TAG, jsonObject.toString())
+                val jsonArray = jsonObject.getJSONArray("riders")
+                val updatedRiders = mutableListOf<Rider>()
+                Log.e(TAG, jsonArray.toString())
+                for(i in 0 until jsonArray.length()) {
+                    val riderJSONObject = jsonArray.getJSONObject(i)
+                    val _id = riderJSONObject.getString("_id")
+                    val id = riderJSONObject.getInt("id")
+                    val active = riderJSONObject.getBoolean("active")
+                    val name = riderJSONObject.getString("name")
+                    val phone = riderJSONObject.getString("phone")
+                    val locationJSONObject = riderJSONObject.getJSONObject("location")
+                    val locationType = locationJSONObject.getString("type")
+                    val locationAddress = locationJSONObject.getString("address")
+                    val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
+                    val locationLat = locationCoordinatesJSONArray.getLong(0)
+                    val locationLong = locationCoordinatesJSONArray.getLong(1)
+
+                    updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, Coordinates(locationLat, locationLong)))
+
+                }
 
                 handler.post { //UI manipulation must be ran on Main thread
-                    textView1.text = response.body()!!.source().readUtf8()
+                    adapter.updateRiders(updatedRiders)
                 }
                 //TODO: put into objects
             }
@@ -107,16 +144,62 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback {
      */
 
     override fun onMapReady(googleMap: GoogleMap?) {
+        Log.e(TAG, "onmapready")
         map = googleMap
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !== PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) !== PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
+        if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // ask for permissions
+            Log.e(TAG, "location access denied")
+            checkLocationPermission()
             return
         }
-        map?.setMyLocationEnabled(true)
+        map?.isMyLocationEnabled = true
         initialUISetup()
 
     }
+
+    private fun checkLocationPermission(): Boolean {
+        if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ) {
+            // Should we show an explanation?
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
+                // Show an explanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+                AlertDialog.Builder(this)
+                        .setTitle(R.string.title_location_permission)
+                        .setMessage(R.string.text_location_permission)
+                        .setPositiveButton(R.string.ok, DialogInterface.OnClickListener { p0, p1 -> ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), MY_PERMISSIONS_REQUEST_LOCATION) })
+                        .create().show()
+            } else {
+                // No explanation needed, we can request the permission.
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), MY_PERMISSIONS_REQUEST_LOCATION)
+            }
+            return false
+        } else {
+            return true
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>,grantResults: IntArray) {
+        if (requestCode == MY_PERMISSIONS_REQUEST_LOCATION) {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // permission was granted, yay! Do the
+                    // location-related task you need to do.
+                    if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        //Request location updates:
+                        //locationManager.requestLocationUpdates(provider, 400, 1, this)
+                        map?.isMyLocationEnabled = true
+                        initialUISetup()
+                    }
+                } else {
+                    // permission denied, boo! Disable the
+                    //TODO: prompt that we need location to work
+                }
+                return
+        }
+    }
+
+
 
     private fun updateUI(location: Location) {
         val zoom = 16.0f
@@ -129,9 +212,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback {
         val zoom = 16.0f
         //latLng = new LatLng(38.941034,-92.338482);
         val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !== PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) !== PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //ask for permissions
+        if ( checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            //ask for permissions, shouldnt happen here since we ask in onmapready
             return
         }
         val location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)

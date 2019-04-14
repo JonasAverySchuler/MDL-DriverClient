@@ -1,5 +1,8 @@
 <resources>
-    <string name="app_name">Driver</string>
+    <string name="app_name">MacDaddy Driver</string>
     <string name="action_settings">Settings</string>
     <string name="sign_in">Sign In</string>
+    <string name="title_location_permission">Location Access Required</string>
+    <string name="text_location_permission">We need your location to route you correctly</string>
+    <string name="ok">Okay</string>
 </resources>
