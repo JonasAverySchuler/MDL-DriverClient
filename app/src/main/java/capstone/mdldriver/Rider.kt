@@ -10,12 +10,12 @@ data class Rider(
 )
 
 data class Location(
-        val type: String,
-        val address: String,
-        val coordinates: Coordinates
+    val type: String,
+    val address: String,
+    val coordinates: Coordinates
 )
 
 data class Coordinates(
-        val lat: Long,
-        val long: Long
+    val lat: Double,
+    val long: Double
 )

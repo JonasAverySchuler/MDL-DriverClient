@@ -29,6 +29,7 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.MarkerOptions
 import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
 import okhttp3.Call
 import okhttp3.Callback
@@ -41,84 +42,39 @@ import java.io.IOException
 private const val TAG = "MainActivity"
 private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
 
-class MainActivity : FragmentActivity(), OnMapReadyCallback {
-
+class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener {
     private val baseUrl: HttpUrl =  HttpUrl.get("http://jl-m.org:8000/")
     private var map: GoogleMap? = null
     private var latLng: LatLng? = null
     private var riders: List<Rider> = emptyList()
+    private val httpClient = OkHttpClient.Builder().build()
+    private val zoom = 16.0f
+
     private lateinit var adapter: RidersRecyclerViewAdapter
 
     companion object {
         fun intent(context: Context)= Intent(context, MainActivity::class.java) //TODO: maybe take in drivers id?
     }
 
+    override fun onRiderClick(rider: Rider) {
+        //TODO go to marker on map
+        //When recylerview item is clicked, go to rider location on map and show route
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat,rider.location.coordinates.long), zoom))
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val httpClient = OkHttpClient.Builder().build()
-
-        val url: HttpUrl = baseUrl.newBuilder("nearbyRiders")!!
-                .addQueryParameter("latitude", "-7.955169") //TODO take in current driver location
-                .addQueryParameter("longitude", "-5.524351")
-                .build()
-
-        val request: Request = Request.Builder().url(url).build()
-        val handler = Handler(Looper.getMainLooper())
-
-        adapter = RidersRecyclerViewAdapter(riders)
-        ridersRecyclerView.adapter = adapter
-        httpClient.newCall(request).enqueue( object: Callback {
-            override fun onFailure(call: Call?, e: IOException?) {
-                Log.e(TAG, "call failure")
-                handler.post { //UI manipulation must be ran on Main thread
-                    //TODO error
-                }
-                //TODO: add fail state
-            }
-
-            override fun onResponse(call: Call?, response: Response?) {
-                val jsonString = response!!.body()!!.string().toString()
-                Log.e(TAG, "string" + jsonString)
-                val jsonObject = JSONObject(jsonString)
-                Log.e(TAG, jsonObject.toString())
-                val jsonArray = jsonObject.getJSONArray("riders")
-                val updatedRiders = mutableListOf<Rider>()
-                Log.e(TAG, jsonArray.toString())
-                for(i in 0 until jsonArray.length()) {
-                    val riderJSONObject = jsonArray.getJSONObject(i)
-                    val _id = riderJSONObject.getString("_id")
-                    val id = riderJSONObject.getInt("id")
-                    val active = riderJSONObject.getBoolean("active")
-                    val name = riderJSONObject.getString("name")
-                    val phone = riderJSONObject.getString("phone")
-                    val locationJSONObject = riderJSONObject.getJSONObject("location")
-                    val locationType = locationJSONObject.getString("type")
-                    val locationAddress = locationJSONObject.getString("address")
-                    val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
-                    val locationLat = locationCoordinatesJSONArray.getLong(0)
-                    val locationLong = locationCoordinatesJSONArray.getLong(1)
-
-                    updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, Coordinates(locationLat, locationLong)))
-
-                }
-
-                handler.post { //UI manipulation must be ran on Main thread
-                    adapter.updateRiders(updatedRiders)
-                }
-                //TODO: put into objects
-            }
-
-        })
-        //TODO: listen for new riders popping up. in manual refresh button
-
-        //TODO: show current lat/long of driver on map, then pop up near riders
-
-
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
+
+        adapter = RidersRecyclerViewAdapter(riders)
+        adapter.listener = this
+        ridersRecyclerView.adapter = adapter
+        //TODO: listen for new riders popping up. in manual refresh button
+
+        //TODO: show current lat/long of driver on map, then pop up near riders
 
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult?) {
@@ -209,8 +165,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback {
     }
 
     private fun initialUISetup() {
-        val zoom = 16.0f
-        //latLng = new LatLng(38.941034,-92.338482);
         val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         if ( checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             //ask for permissions, shouldnt happen here since we ask in onmapready
@@ -226,6 +180,57 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback {
 
     private fun setMarkers() {
 
+        val url: HttpUrl = baseUrl.newBuilder("nearbyRiders")!!
+                .addQueryParameter("latitude", "-7.955169") //TODO take in current driver location
+                .addQueryParameter("longitude", "-5.524351")
+                .build()
+
+
+        val request: Request = Request.Builder().url(url).build()
+        val handler = Handler(Looper.getMainLooper())
+
+        httpClient.newCall(request).enqueue( object: Callback {
+            override fun onFailure(call: Call?, e: IOException?) {
+                Log.e(TAG, "call failure")
+                handler.post { //UI manipulation must be ran on Main thread
+                    //TODO error
+                }
+            }
+
+            override fun onResponse(call: Call?, response: Response?) {
+                val jsonString = response!!.body()!!.string().toString()
+                val jsonObject = JSONObject(jsonString)
+                Log.e(TAG, "jsonResponse:$jsonObject")
+                val jsonArray = jsonObject.getJSONArray("riders")
+                val updatedRiders = mutableListOf<Rider>()
+                Log.e(TAG, "riders jsonArray size: " + jsonArray.length())
+                for(i in 0 until jsonArray.length()) {
+                    val riderJSONObject = jsonArray.getJSONObject(i)
+                    val _id = riderJSONObject.getString("_id")
+                    val id = riderJSONObject.getInt("id")
+                    val active = riderJSONObject.getBoolean("active")
+                    val name = riderJSONObject.getString("name")
+                    val phone = riderJSONObject.getString("phone")
+                    val locationJSONObject = riderJSONObject.getJSONObject("location")
+                    val locationType = locationJSONObject.getString("type")
+                    val locationAddress = locationJSONObject.getString("address")
+                    val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
+                    val locationLat = locationCoordinatesJSONArray.getDouble(0)
+                    val locationLong = locationCoordinatesJSONArray.getDouble(1)
+
+                    updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, Coordinates(locationLat, locationLong)))
+                }
+
+                handler.post { //UI manipulation must be ran on Main thread
+                    adapter.updateRiders(updatedRiders)
+                    updatedRiders.forEach {
+                        map?.addMarker(MarkerOptions().position(LatLng(it.location.coordinates.lat, it.location.coordinates.long)).title(it.location.address))
+                    }
+                }
+
+            }
+
+        })
     }
 
 
