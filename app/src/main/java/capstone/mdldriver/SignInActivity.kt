@@ -11,6 +11,9 @@ class SignInActivity: AppCompatActivity() {
         setContentView(R.layout.sigin_activity)
         singInButton.setOnClickListener {
             //TODO: facebook/google sign in with Oauth
+            //TODO: socket to join event. does starting the app profucve a join event oin the server?
+            //TODO: user logij is the user able to log in using credentials stored on the db?
+
             startActivity(MainActivity.intent(this))
         }
     }

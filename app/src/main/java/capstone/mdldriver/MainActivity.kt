@@ -26,6 +26,7 @@ import android.support.v7.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationListener
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
@@ -42,7 +43,13 @@ import java.io.IOException
 private const val TAG = "MainActivity"
 private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
 
-class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener {
+class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener, LocationListener {
+
+    override fun onLocationChanged(p0: Location?) {
+        Log.e(TAG, "location changed")
+
+    }
+
     private val baseUrl: HttpUrl =  HttpUrl.get("http://jl-m.org:8000/")
     private var map: GoogleMap? = null
     private var latLng: LatLng? = null
@@ -57,13 +64,17 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     override fun onRiderClick(rider: Rider) {
-        //TODO go to marker on map
         //When recylerview item is clicked, go to rider location on map and show route
-        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat,rider.location.coordinates.long), zoom))
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat, rider.location.coordinates.long), zoom))
+        //TODO: does confirming a ride properly send request to server?
+        //TODO: does the app show estimated time to drive o rider"?
+        //TODO /riderinfo ???"
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        //TODO: add driver side tab, figure out /insertDriver shit
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
@@ -76,6 +87,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
         //TODO: show current lat/long of driver on map, then pop up near riders
 
+        addComoMarker()
+
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult?) {
                 if (locationResult == null) {
@@ -86,7 +99,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 }
             }
         }
-
     }
 
     /**
@@ -111,6 +123,30 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         map?.isMyLocationEnabled = true
         initialUISetup()
 
+    }
+
+    private fun addComoMarker() {
+        val url: HttpUrl = baseUrl.newBuilder("insertRider")!!
+                .addQueryParameter("active", "true") //TODO take in current driver location
+                .addQueryParameter("latitude", "38.947621")
+                .addQueryParameter("longitude", "-92.327374")
+                .addQueryParameter("name", "Jonas")
+                .addQueryParameter("phone", "6366976421")
+                .addQueryParameter("address", "harpos")
+                .build()
+
+
+        val request: Request = Request.Builder().url(url).build()
+        httpClient.newCall(request).enqueue(object: Callback {
+            override fun onFailure(call: Call?, e: IOException?) {
+                Log.e(TAG, "insert call failure")
+            }
+
+            override fun onResponse(call: Call?, response: Response?) {
+                Log.e(TAG, "insert response: " + response.toString())
+            }
+
+        })
     }
 
     private fun checkLocationPermission(): Boolean {
@@ -170,6 +206,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             //ask for permissions, shouldnt happen here since we ask in onmapready
             return
         }
+
+
         val location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
         val longitude = location.longitude
         val latitude = location.latitude
@@ -188,6 +226,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
         val request: Request = Request.Builder().url(url).build()
         val handler = Handler(Looper.getMainLooper())
+
+
 
         httpClient.newCall(request).enqueue( object: Callback {
             override fun onFailure(call: Call?, e: IOException?) {
