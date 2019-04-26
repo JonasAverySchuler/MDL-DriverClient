@@ -7,6 +7,7 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Handler
@@ -17,20 +18,15 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.LatLng
 import okhttp3.HttpUrl
 import android.support.v4.app.ActivityCompat
-import android.support.v4.app.ActivityCompat.*
 import android.support.v4.app.FragmentActivity
-import android.support.v4.content.ContextCompat
 import android.support.v4.content.ContextCompat.checkSelfPermission
 import android.support.v7.app.AlertDialog
-import android.support.v7.widget.RecyclerView
-import android.view.LayoutInflater
-import android.view.ViewGroup
 import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationListener
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.MarkerOptions
+import kotlinx.android.synthetic.main.activity_main.refreshButton
 import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
 import okhttp3.Call
 import okhttp3.Callback
@@ -43,13 +39,7 @@ import java.io.IOException
 private const val TAG = "MainActivity"
 private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
 
-class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener, LocationListener {
-
-    override fun onLocationChanged(p0: Location?) {
-        Log.e(TAG, "location changed")
-
-    }
-
+class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener, LocationListener{
     private val baseUrl: HttpUrl =  HttpUrl.get("http://jl-m.org:8000/")
     private var map: GoogleMap? = null
     private var latLng: LatLng? = null
@@ -61,6 +51,24 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     companion object {
         fun intent(context: Context)= Intent(context, MainActivity::class.java) //TODO: maybe take in drivers id?
+    }
+
+    override fun onLocationChanged(location: Location) {
+        Log.e(TAG, "onLocationChanged!!!!" + location.longitude + ":" + location.latitude)
+        val longitude = location.longitude
+        val latitude = location.latitude
+        latLng = LatLng(latitude, longitude)
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
+        //setMarkers()
+    }
+    override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {
+        Log.e(TAG, "onStatusChanged")
+    }
+    override fun onProviderEnabled(provider: String) {
+        Log.e(TAG, "onProviderEnabled")
+    }
+    override fun onProviderDisabled(provider: String) {
+        Log.e(TAG, "onProviderDisabled: " + provider)
     }
 
     override fun onRiderClick(rider: Rider) {
@@ -83,22 +91,12 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         adapter = RidersRecyclerViewAdapter(riders)
         adapter.listener = this
         ridersRecyclerView.adapter = adapter
-        //TODO: listen for new riders popping up. in manual refresh button
 
-        //TODO: show current lat/long of driver on map, then pop up near riders
-
-        addComoMarker()
-
-        val locationCallback = object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult?) {
-                if (locationResult == null) {
-                    return
-                }
-                for (location in locationResult!!.getLocations()) {
-                    updateUI(location)
-                }
-            }
+        refreshButton.setOnClickListener {
+            //TODO make call for riders, update recyclerview and map
         }
+
+       // addComoMarker()
     }
 
     /**
@@ -116,10 +114,11 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         map = googleMap
         if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // ask for permissions
-            Log.e(TAG, "location access denied")
+            Log.e(TAG, "location access denied in onmapready")
             checkLocationPermission()
             return
         }
+        Log.e(TAG, "location access granted in onmapready")
         map?.isMyLocationEnabled = true
         initialUISetup()
 
@@ -139,7 +138,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         val request: Request = Request.Builder().url(url).build()
         httpClient.newCall(request).enqueue(object: Callback {
             override fun onFailure(call: Call?, e: IOException?) {
-                Log.e(TAG, "insert call failure")
+                Log.e(TAG, "insert call failure:" + e.toString())
             }
 
             override fun onResponse(call: Call?, response: Response?) {
@@ -201,19 +200,21 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     private fun initialUISetup() {
-        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         if ( checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             //ask for permissions, shouldnt happen here since we ask in onmapready
             return
         }
 
 
-        val location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        val longitude = location.longitude
-        val latitude = location.latitude
-        latLng = LatLng(latitude, longitude)
-        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
-        setMarkers()
+        val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        try {
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, this)
+        } catch (ex: SecurityException) {
+            Log.e(TAG, "SEC EX")
+        }
+
+
     }
 
     private fun setMarkers() {
@@ -231,7 +232,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
         httpClient.newCall(request).enqueue( object: Callback {
             override fun onFailure(call: Call?, e: IOException?) {
-                Log.e(TAG, "call failure")
+                Log.e(TAG, "nearby riders call failure:" + e.toString())
                 handler.post { //UI manipulation must be ran on Main thread
                     //TODO error
                 }

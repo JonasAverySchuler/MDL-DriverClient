@@ -34,4 +34,13 @@
         app:layoutManager="android.support.v7.widget.LinearLayoutManager"
         />
 
+    <Button
+        android:id="@+id/refreshButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Refresh Riders"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/ridersRecyclerView"
+        />
+
 </android.support.constraint.ConstraintLayout>
