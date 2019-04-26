@@ -22,8 +22,10 @@ import android.support.v4.app.FragmentActivity
 import android.support.v4.content.ContextCompat.checkSelfPermission
 import android.support.v4.content.ContextCompat.getSystemService
 import android.support.v7.app.AlertDialog
+import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.MarkerOptions
@@ -39,6 +41,7 @@ import java.io.IOException
 
 private const val TAG = "MainActivity"
 private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
+private const val DRIVER_LOCATION_DEBOUNCE_MILLS = 10000L
 
 class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener, LocationListener{
     private val baseUrl: HttpUrl =  HttpUrl.get("http://jl-m.org:8000/")
@@ -49,18 +52,19 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private val zoom = 16.0f
 
     private lateinit var adapter: RidersRecyclerViewAdapter
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     companion object {
         fun intent(context: Context)= Intent(context, MainActivity::class.java) //TODO: maybe take in drivers id?
     }
 
     override fun onLocationChanged(location: Location) {
-        Log.e(TAG, "onLocationChanged!!!!" + location.longitude + ":" + location.latitude)
+      //  Log.e(TAG, "updated driver location: " + location.longitude + " : " + location.latitude)
         val longitude = location.longitude
         val latitude = location.latitude
         latLng = LatLng(latitude, longitude)
+        //TODO let driver pan and or show route to rider , rn it constantly repans to the current location
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
-        //setMarkers()
     }
     override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {
         Log.e(TAG, "onStatusChanged")
@@ -70,10 +74,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
     override fun onProviderDisabled(provider: String) {
         Log.e(TAG, "onProviderDisabled: " + provider)
-        val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        locationManager.allProviders.forEach {
-            Log.e(TAG, it + " onproviderdisabled : " + locationManager.isProviderEnabled(it))
-        }
     }
 
     override fun onRiderClick(rider: Rider) {
@@ -98,10 +98,75 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         ridersRecyclerView.adapter = adapter
 
         refreshButton.setOnClickListener {
-            //TODO make call for riders, update recyclerview and map
+            setRiderLocations()
         }
 
-       // addComoMarker()
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        //setRiderLocations()
+        addComoMarker()
+    }
+
+    private fun setRiderLocations() {
+
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener {
+                onLocationChanged(it)
+            val url: HttpUrl = baseUrl.newBuilder("nearbyRiders")!!
+                    .addQueryParameter("latitude", it.latitude.toString())
+                    .addQueryParameter("longitude", it.longitude.toString())
+                    .build()
+
+
+            val request: Request = Request.Builder().url(url).build()
+            val handler = Handler(Looper.getMainLooper())
+
+            httpClient.newCall(request).enqueue( object: Callback {
+                override fun onFailure(call: Call?, e: IOException?) {
+                    Log.e(TAG, "nearby riders call failure:" + e.toString() + " call: " + call.toString())
+                    handler.post { //UI manipulation must be ran on Main thread
+                        //TODO error
+                    }
+                }
+
+                override fun onResponse(call: Call?, response: Response?) {
+                    val jsonString = response!!.body()!!.string().toString()
+                    val jsonObject = JSONObject(jsonString)
+                    Log.e(TAG, "jsonResponse:$jsonObject")
+                    val jsonArray = jsonObject.getJSONArray("riders")
+                    val updatedRiders = mutableListOf<Rider>()
+                    Log.e(TAG, "riders jsonArray size: " + jsonArray.length())
+                    for(i in 0 until jsonArray.length()) {
+                        val riderJSONObject = jsonArray.getJSONObject(i)
+                        val _id = riderJSONObject.getString("_id")
+                        val id = riderJSONObject.getInt("id")
+                        val active = riderJSONObject.getBoolean("active")
+                        val name = riderJSONObject.getString("name")
+                        val phone = riderJSONObject.getString("phone")
+                        val locationJSONObject = riderJSONObject.getJSONObject("location")
+                        val locationType = locationJSONObject.getString("type")
+                        val locationAddress = locationJSONObject.getString("address")
+                        val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
+                        val locationLat = locationCoordinatesJSONArray.getDouble(0)
+                        val locationLong = locationCoordinatesJSONArray.getDouble(1)
+
+                        updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, Coordinates(locationLat, locationLong)))
+                    }
+
+                    handler.post { //UI manipulation must be ran on Main thread
+                        adapter.updateRiders(updatedRiders)
+                        updatedRiders.forEach {
+                            map?.addMarker(MarkerOptions().position(LatLng(it.location.coordinates.lat, it.location.coordinates.long)).title(it.location.address))
+                        }
+                    }
+
+                }
+
+            })
+
+        }}catch (ex: SecurityException) {
+            Log.e(TAG, ex.toString())
+        }
     }
 
     /**
@@ -128,24 +193,15 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         map?.isMyLocationEnabled = true
         val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-        locationManager.allProviders.forEach {
-            //DEBUG purposes to see which location providers are enabled
-            Log.e(TAG, it + " : " + locationManager.isProviderEnabled(it))
-        }
-
-
-
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             //TODO: ensure user has GPS High accuracy enabled and prompt them to if not
         }
 
         try {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1L, 1f, this)
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, DRIVER_LOCATION_DEBOUNCE_MILLS, 0f, this)
         } catch (ex: SecurityException) {
             Log.e(TAG, "SEC EX")
         }
-
-
     }
 
     private fun addComoMarker() {
@@ -213,63 +269,5 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 return
         }
     }
-
-    private fun setMarkers() {
-
-        val url: HttpUrl = baseUrl.newBuilder("nearbyRiders")!!
-                .addQueryParameter("latitude", "-7.955169") //TODO take in current driver location
-                .addQueryParameter("longitude", "-5.524351")
-                .build()
-
-
-        val request: Request = Request.Builder().url(url).build()
-        val handler = Handler(Looper.getMainLooper())
-
-
-
-        httpClient.newCall(request).enqueue( object: Callback {
-            override fun onFailure(call: Call?, e: IOException?) {
-                Log.e(TAG, "nearby riders call failure:" + e.toString())
-                handler.post { //UI manipulation must be ran on Main thread
-                    //TODO error
-                }
-            }
-
-            override fun onResponse(call: Call?, response: Response?) {
-                val jsonString = response!!.body()!!.string().toString()
-                val jsonObject = JSONObject(jsonString)
-                Log.e(TAG, "jsonResponse:$jsonObject")
-                val jsonArray = jsonObject.getJSONArray("riders")
-                val updatedRiders = mutableListOf<Rider>()
-                Log.e(TAG, "riders jsonArray size: " + jsonArray.length())
-                for(i in 0 until jsonArray.length()) {
-                    val riderJSONObject = jsonArray.getJSONObject(i)
-                    val _id = riderJSONObject.getString("_id")
-                    val id = riderJSONObject.getInt("id")
-                    val active = riderJSONObject.getBoolean("active")
-                    val name = riderJSONObject.getString("name")
-                    val phone = riderJSONObject.getString("phone")
-                    val locationJSONObject = riderJSONObject.getJSONObject("location")
-                    val locationType = locationJSONObject.getString("type")
-                    val locationAddress = locationJSONObject.getString("address")
-                    val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
-                    val locationLat = locationCoordinatesJSONArray.getDouble(0)
-                    val locationLong = locationCoordinatesJSONArray.getDouble(1)
-
-                    updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, Coordinates(locationLat, locationLong)))
-                }
-
-                handler.post { //UI manipulation must be ran on Main thread
-                    adapter.updateRiders(updatedRiders)
-                    updatedRiders.forEach {
-                        map?.addMarker(MarkerOptions().position(LatLng(it.location.coordinates.lat, it.location.coordinates.long)).title(it.location.address))
-                    }
-                }
-
-            }
-
-        })
-    }
-
 
 }
