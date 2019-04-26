@@ -20,6 +20,7 @@ import okhttp3.HttpUrl
 import android.support.v4.app.ActivityCompat
 import android.support.v4.app.FragmentActivity
 import android.support.v4.content.ContextCompat.checkSelfPermission
+import android.support.v4.content.ContextCompat.getSystemService
 import android.support.v7.app.AlertDialog
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
@@ -69,6 +70,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
     override fun onProviderDisabled(provider: String) {
         Log.e(TAG, "onProviderDisabled: " + provider)
+        val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        locationManager.allProviders.forEach {
+            Log.e(TAG, it + " onproviderdisabled : " + locationManager.isProviderEnabled(it))
+        }
     }
 
     override fun onRiderClick(rider: Rider) {
@@ -119,8 +124,27 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             return
         }
         Log.e(TAG, "location access granted in onmapready")
+
         map?.isMyLocationEnabled = true
-        initialUISetup()
+        val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        locationManager.allProviders.forEach {
+            //DEBUG purposes to see which location providers are enabled
+            Log.e(TAG, it + " : " + locationManager.isProviderEnabled(it))
+        }
+
+
+
+        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            //TODO: ensure user has GPS High accuracy enabled and prompt them to if not
+        }
+
+        try {
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1L, 1f, this)
+        } catch (ex: SecurityException) {
+            Log.e(TAG, "SEC EX")
+        }
+
 
     }
 
@@ -180,7 +204,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                         //Request location updates:
                         //locationManager.requestLocationUpdates(provider, 400, 1, this)
                         map?.isMyLocationEnabled = true
-                        initialUISetup()
+                        //TODO set up map w location
                     }
                 } else {
                     // permission denied, boo! Disable the
@@ -188,33 +212,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 }
                 return
         }
-    }
-
-
-
-    private fun updateUI(location: Location) {
-        val zoom = 16.0f
-        latLng = LatLng(location.latitude, location.longitude)
-        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
-
-    }
-
-    private fun initialUISetup() {
-        if ( checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            //ask for permissions, shouldnt happen here since we ask in onmapready
-            return
-        }
-
-
-        val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
-        try {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, this)
-        } catch (ex: SecurityException) {
-            Log.e(TAG, "SEC EX")
-        }
-
-
     }
 
     private fun setMarkers() {
