@@ -20,13 +20,21 @@ import android.support.v4.app.ActivityCompat
 import android.support.v4.app.FragmentActivity
 import android.support.v4.content.ContextCompat.checkSelfPermission
 import android.support.v7.app.AlertDialog
+import android.view.View
+import android.widget.TextView
+import android.widget.Toast
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import kotlinx.android.synthetic.main.activity_main.refreshButton
 import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
+import kotlinx.android.synthetic.main.marker_layout.confirmRideButton
+import kotlinx.android.synthetic.main.marker_layout.view.confirmRideButton
+import kotlinx.android.synthetic.main.marker_layout.view.nameTextView
+import kotlinx.android.synthetic.main.marker_layout.view.snippetTextView
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -46,6 +54,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private var riders: List<Rider> = emptyList()
     private val httpClient = OkHttpClient.Builder().build()
     private val zoom = 16.0f
+
+    //Test data if you need it
     private val fakeRider1 = Rider("123", 1, true, "Jon", "55234234", capstone.mdldriver.Location("house", "McDondalds", Coordinates(38.816730, -90.699642)) )
     private val fakeRider2 = Rider("1223", 2, true, "Bobert", "23234234", capstone.mdldriver.Location("house", "Carlitos", Coordinates(38.716730, -90.499642)) )
     private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", capstone.mdldriver.Location("house", "McNallys", Coordinates(38.9506438, -92.3290139)) )
@@ -139,10 +149,9 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 override fun onResponse(call: Call?, response: Response?) {
                     val jsonString = response!!.body()!!.string().toString()
                     val jsonObject = JSONObject(jsonString)
-                    Log.e(TAG, "jsonResponse:$jsonObject")
+                    Log.v(TAG, "jsonResponse:$jsonObject")
                     val jsonArray = jsonObject.getJSONArray("riders")
                     val updatedRiders = mutableListOf<Rider>()
-                    Log.e(TAG, "riders jsonArray size: " + jsonArray.length())
                     for(i in 0 until jsonArray.length()) {
                         val riderJSONObject = jsonArray.getJSONObject(i)
                         val _id = riderJSONObject.getString("_id")
@@ -154,29 +163,22 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                         val locationType = locationJSONObject.getString("type")
                         val locationAddress = locationJSONObject.getString("address")
                         val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
-                        Log.e(TAG, "coords array: " + locationCoordinatesJSONArray.toString())
                         val locationLat = locationCoordinatesJSONArray.getDouble(1)
                         val locationLong = locationCoordinatesJSONArray.getDouble(0)
-                        Log.e(TAG, "locationLat: " + locationLat + " locationLong: " + locationLong )
-
                         val coords = Coordinates(locationLat, locationLong)
-                        Log.e(TAG, "coords: " + coords.toString())
 
-                        updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, Coordinates(locationLat, locationLong)))
+                        updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, coords))
                     }
 
                     handler.post { //UI manipulation must be ran on Main thread
                         adapter.updateRiders(updatedRiders)
-                        // Fake Data for now
 
-
-                        //
                         updatedRiders.forEach {
                             if (it.active) {
                                 map?.addMarker(MarkerOptions()
                                         .position(LatLng(it.location.coordinates.lat, it.location.coordinates.long))
                                         .title(it.location.address)
-                                        .snippet(it.phone + " : " + it.name))
+                                        .snippet(it.phone + "\n" + it.name))
                             }
                         }
                     }
@@ -204,7 +206,23 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         Log.e(TAG, "onmapready")
         map = googleMap
 
+        map!!.setInfoWindowAdapter(object : GoogleMap.InfoWindowAdapter {
+            override fun getInfoContents(marker: Marker?) = null
 
+            override fun getInfoWindow(marker: Marker?): View? {
+                val v: View = layoutInflater.inflate(R.layout.marker_layout, null)
+                if (marker != null) {
+                    v.nameTextView.text = marker.title
+                    v.snippetTextView.text = marker.snippet
+                    v.confirmRideButton.setOnClickListener {
+                        Toast.makeText(this@MainActivity, "Boop", Toast.LENGTH_SHORT).show()
+                        //TODO: show route, confirm ride to server, show eta, change screen and add finished ride button
+                    }
+                }
+                return (v)
+            }
+
+        })
 
 
         if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {

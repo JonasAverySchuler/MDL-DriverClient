@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
 
-    android:background="@color/white">
+    android:background="@color/colorPrimaryDark">
 
     <TextView
         android:id="@+id/nameTextView"
@@ -14,10 +14,15 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginTop="8dp"
 
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@id/addressTextView"
+
+        android:textSize="20sp"
+        android:textColor="@color/white"
 
         tools:text="Jonas Schuler"
         />
@@ -33,6 +38,9 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/nameTextView"
 
+        android:textSize="20sp"
+        android:textColor="@color/white"
+
         tools:text="Student Center"
         />
 
@@ -42,10 +50,12 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="16dp"
         android:layout_marginStart="16dp"
-        android:layout_marginBottom="16dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginTop="8dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/addressTextView"
+
+        android:textSize="20sp"
+        android:textColor="@color/white"
 
         tools:text="6366973737"
         />
@@ -53,7 +63,8 @@
     <View
         android:id="@+id/dividerView"
         android:layout_width="match_parent"
-        android:layout_height="1dp"
+        android:layout_height="2dp"
+        android:layout_marginTop="8dp"
         app:layout_constraintTop_toBottomOf="@id/phoneTextView"
 
         android:background="@color/colorPrimary"
