@@ -1,7 +1,6 @@
 package capstone.mdldriver
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
@@ -20,11 +19,8 @@ import okhttp3.HttpUrl
 import android.support.v4.app.ActivityCompat
 import android.support.v4.app.FragmentActivity
 import android.support.v4.content.ContextCompat.checkSelfPermission
-import android.support.v4.content.ContextCompat.getSystemService
 import android.support.v7.app.AlertDialog
 import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
@@ -41,7 +37,7 @@ import java.io.IOException
 
 private const val TAG = "MainActivity"
 private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
-private const val DRIVER_LOCATION_DEBOUNCE_MILLS = 10000L
+private const val DRIVER_LOCATION_DEBOUNCE_MILLS = 1000L
 
 class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener, LocationListener{
     private val baseUrl: HttpUrl =  HttpUrl.get("http://jl-m.org:8000/")
@@ -50,6 +46,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private var riders: List<Rider> = emptyList()
     private val httpClient = OkHttpClient.Builder().build()
     private val zoom = 16.0f
+    private val fakeRider1 = Rider("123", 1, true, "Jon", "55234234", capstone.mdldriver.Location("house", "McDondalds", Coordinates(38.816730, -90.699642)) )
+    private val fakeRider2 = Rider("1223", 2, true, "Bobert", "23234234", capstone.mdldriver.Location("house", "Carlitos", Coordinates(38.716730, -90.499642)) )
+    private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", capstone.mdldriver.Location("house", "McNallys", Coordinates(38.9506438, -92.3290139)) )
+    private val fakeRider4 = Rider("12235", 4, true, "Lily", "2323734", capstone.mdldriver.Location("house", "Harpos", Coordinates(38.9506438, -92.3290139)) )
 
     private lateinit var adapter: RidersRecyclerViewAdapter
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -59,12 +59,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     override fun onLocationChanged(location: Location) {
-      //  Log.e(TAG, "updated driver location: " + location.longitude + " : " + location.latitude)
+        Log.v(TAG, "updated driver location: " + location.longitude + " : " + location.latitude)
         val longitude = location.longitude
         val latitude = location.latitude
         latLng = LatLng(latitude, longitude)
-        //TODO let driver pan and or show route to rider , rn it constantly repans to the current location
-        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
     }
     override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {
         Log.e(TAG, "onStatusChanged")
@@ -101,10 +99,19 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             setRiderLocations()
         }
 
+        //addMarker()
+
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        //setRiderLocations()
-        addComoMarker()
+        //TODO check for permissions here
+
+        //addMarker() here to try and add backend coord, not wokring
+
+        setRiderLocations()
+    }
+
+    private fun centerMapOnDriver() {
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
     }
 
     private fun setRiderLocations() {
@@ -139,7 +146,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                     for(i in 0 until jsonArray.length()) {
                         val riderJSONObject = jsonArray.getJSONObject(i)
                         val _id = riderJSONObject.getString("_id")
-                        val id = riderJSONObject.getInt("id")
+                        val id = riderJSONObject.optInt("id") //backend allows to ignore this so it might not be in the response
                         val active = riderJSONObject.getBoolean("active")
                         val name = riderJSONObject.getString("name")
                         val phone = riderJSONObject.getString("phone")
@@ -147,16 +154,30 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                         val locationType = locationJSONObject.getString("type")
                         val locationAddress = locationJSONObject.getString("address")
                         val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
-                        val locationLat = locationCoordinatesJSONArray.getDouble(0)
-                        val locationLong = locationCoordinatesJSONArray.getDouble(1)
+                        Log.e(TAG, "coords array: " + locationCoordinatesJSONArray.toString())
+                        val locationLat = locationCoordinatesJSONArray.getDouble(1)
+                        val locationLong = locationCoordinatesJSONArray.getDouble(0)
+                        Log.e(TAG, "locationLat: " + locationLat + " locationLong: " + locationLong )
+
+                        val coords = Coordinates(locationLat, locationLong)
+                        Log.e(TAG, "coords: " + coords.toString())
 
                         updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, Coordinates(locationLat, locationLong)))
                     }
 
                     handler.post { //UI manipulation must be ran on Main thread
                         adapter.updateRiders(updatedRiders)
+                        // Fake Data for now
+
+
+                        //
                         updatedRiders.forEach {
-                            map?.addMarker(MarkerOptions().position(LatLng(it.location.coordinates.lat, it.location.coordinates.long)).title(it.location.address))
+                            if (it.active) {
+                                map?.addMarker(MarkerOptions()
+                                        .position(LatLng(it.location.coordinates.lat, it.location.coordinates.long))
+                                        .title(it.location.address)
+                                        .snippet(it.phone + " : " + it.name))
+                            }
                         }
                     }
 
@@ -182,6 +203,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     override fun onMapReady(googleMap: GoogleMap?) {
         Log.e(TAG, "onmapready")
         map = googleMap
+
+
+
+
         if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // ask for permissions
             Log.e(TAG, "location access denied in onmapready")
@@ -202,16 +227,24 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         } catch (ex: SecurityException) {
             Log.e(TAG, "SEC EX")
         }
+
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener {
+                centerMapOnDriver()
+            }
+        } catch (ex: SecurityException) {
+            Log.e(TAG, "Security Exception")
+        }
     }
 
-    private fun addComoMarker() {
+    private fun addMarker() {
         val url: HttpUrl = baseUrl.newBuilder("insertRider")!!
                 .addQueryParameter("active", "true") //TODO take in current driver location
-                .addQueryParameter("latitude", "38.947621")
-                .addQueryParameter("longitude", "-92.327374")
+                .addQueryParameter("latitude", "38.822057")
+                .addQueryParameter("longitude", "-90.700158")
                 .addQueryParameter("name", "Jonas")
                 .addQueryParameter("phone", "6366976421")
-                .addQueryParameter("address", "harpos")
+                .addQueryParameter("address", "mcdondalds")
                 .build()
 
 
@@ -222,11 +255,35 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             }
 
             override fun onResponse(call: Call?, response: Response?) {
-                Log.e(TAG, "insert response: " + response.toString())
+                Log.e(TAG, "insert response: " + response?.body()!!.string())
             }
 
         })
     }
+
+    //Below is code for getting directions from current location to rider
+
+    private fun getDirectionsUrl(origin: LatLng, dest: LatLng): String {
+        // Origin of route
+        val str_origin = "origin=" + origin.latitude + "," + origin.longitude
+
+        // Destination of route
+        val str_dest = "destination=" + dest.latitude + "," + dest.longitude
+
+        // Sensor enabled
+        val sensor = "sensor=false"
+
+        // Building the parameters to the web service
+        val parameters = "$str_origin&$str_dest&$sensor"
+
+        // Output format
+        val output = "json"
+
+        // Building the url to the web service
+
+        return "https://maps.googleapis.com/maps/api/directions/$output?$parameters"
+    }
+
 
     private fun checkLocationPermission(): Boolean {
         if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ) {
