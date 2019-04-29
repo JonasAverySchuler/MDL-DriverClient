@@ -6,8 +6,7 @@
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
 
-    android:background="@color/white"
-    >
+    android:background="@color/colorPrimaryDark">
 
     <TextView
         android:id="@+id/nameTextView"
@@ -16,7 +15,10 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@id/snippetTextView"
         android:layout_marginStart="8dp"
+        android:padding="8dp"
 
+
+        android:textColor="@color/white"
         tools:text="Jonas"
         />
 
@@ -27,6 +29,8 @@
         app:layout_constraintTop_toBottomOf="@id/nameTextView"
         app:layout_constraintBottom_toTopOf="@id/confirmRideButton"
 
+        android:padding="8dp"
+        android:textColor="@color/white"
         tools:text="Eastside Tavern"
         />
 
@@ -37,6 +41,8 @@
         app:layout_constraintTop_toBottomOf="@id/snippetTextView"
         app:layout_constraintBottom_toBottomOf="parent"
 
+        android:textColor="@color/white"
+        android:background="@android:color/holo_green_dark"
         android:text="@string/confirm_ride"
         />
 

@@ -38,6 +38,8 @@
         android:id="@+id/refreshButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:padding="5dp"
+        android:background="@android:color/holo_green_dark"
         android:text="Refresh Riders"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toTopOf="@id/ridersRecyclerView"

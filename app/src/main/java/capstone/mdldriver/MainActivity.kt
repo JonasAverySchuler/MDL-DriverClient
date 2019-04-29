@@ -46,6 +46,8 @@ import java.io.IOException
 private const val TAG = "MainActivity"
 private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
 private const val DRIVER_LOCATION_DEBOUNCE_MILLS = 1000L
+private const val DRIVER_NAME_EXTRA_STRING = "DriverName"
+private const val DRIVER_PHONE_EXTRA_STRING = "Phone"
 
 class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewAdapter.Listener, LocationListener{
     private val baseUrl: HttpUrl =  HttpUrl.get("http://jl-m.org:8000/")
@@ -63,9 +65,16 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     private lateinit var adapter: RidersRecyclerViewAdapter
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var driverName: String
+    private lateinit var driverPhone: String
 
     companion object {
-        fun intent(context: Context)= Intent(context, MainActivity::class.java) //TODO: maybe take in drivers id?
+        fun intent(context: Context, name: String, phone: String): Intent {
+            val intent = Intent(context, MainActivity::class.java)
+            intent.putExtra(DRIVER_NAME_EXTRA_STRING, name)
+            intent.putExtra(DRIVER_PHONE_EXTRA_STRING, phone)
+            return intent
+        }
     }
 
     override fun onLocationChanged(location: Location) {
@@ -73,6 +82,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         val longitude = location.longitude
         val latitude = location.latitude
         latLng = LatLng(latitude, longitude)
+        //TODO: update driver on server so rider client can see where the driver is now
     }
     override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {
         Log.e(TAG, "onStatusChanged")
@@ -87,13 +97,15 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     override fun onRiderClick(rider: Rider) {
         //When recylerview item is clicked, go to rider location on map and show route
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat, rider.location.coordinates.long), zoom))
-        //TODO: does confirming a ride properly send request to server?
-        //TODO: does the app show estimated time to drive o rider"?
-        //TODO /riderinfo ???"
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        driverName = intent.getStringExtra(DRIVER_NAME_EXTRA_STRING)
+        driverPhone = intent.getStringExtra(DRIVER_PHONE_EXTRA_STRING)
+
+        insertNewActiveDriver()
 
         //TODO: add driver side tab, figure out /insertDriver shit
 
@@ -120,8 +132,43 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         setRiderLocations()
     }
 
+    override fun onResume() {
+        super.onResume()
+        centerMapOnDriver()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        //TODO: update driver as no longer taking riders on the server
+    }
+
+    private fun insertNewActiveDriver() {
+        val url: HttpUrl = baseUrl.newBuilder("insertDriver")!!
+                .addQueryParameter("active", "true")
+                .addQueryParameter("latitude", "38.822057")
+                .addQueryParameter("longitude", "-90.700158")
+                .addQueryParameter("name", driverName)
+                .addQueryParameter("phone", driverPhone)
+                .build()
+
+
+        val request: Request = Request.Builder().url(url).build()
+        httpClient.newCall(request).enqueue(object: Callback {
+            override fun onFailure(call: Call?, e: IOException?) {
+                Log.e(TAG, "insert driver call failure:" + e.toString())
+            }
+
+            override fun onResponse(call: Call?, response: Response?) {
+                Log.e(TAG, "insert driver response: " + response?.body()!!.string())
+            }
+
+        })
+    }
+
     private fun centerMapOnDriver() {
-        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
+        latLng?.let {
+            map?.moveCamera(CameraUpdateFactory.newLatLngZoom(it, zoom))
+        }
     }
 
     private fun setRiderLocations() {
@@ -206,6 +253,11 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         Log.e(TAG, "onmapready")
         map = googleMap
 
+        map!!.setOnInfoWindowClickListener {
+            Toast.makeText(this@MainActivity, "Boop", Toast.LENGTH_SHORT).show()
+            //TODO: show route, confirm ride to server, show eta, change screen and add finished ride button
+        }
+
         map!!.setInfoWindowAdapter(object : GoogleMap.InfoWindowAdapter {
             override fun getInfoContents(marker: Marker?) = null
 
@@ -214,10 +266,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 if (marker != null) {
                     v.nameTextView.text = marker.title
                     v.snippetTextView.text = marker.snippet
-                    v.confirmRideButton.setOnClickListener {
-                        Toast.makeText(this@MainActivity, "Boop", Toast.LENGTH_SHORT).show()
-                        //TODO: show route, confirm ride to server, show eta, change screen and add finished ride button
-                    }
                 }
                 return (v)
             }
@@ -225,7 +273,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         })
 
 
-        if (checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if ( checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // ask for permissions
             Log.e(TAG, "location access denied in onmapready")
             checkLocationPermission()
