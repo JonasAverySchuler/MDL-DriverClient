@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import kotlinx.android.synthetic.main.rider_row_item.view.addressTextView
+import kotlinx.android.synthetic.main.rider_row_item.view.confirmRideButton
 import kotlinx.android.synthetic.main.rider_row_item.view.nameTextView
 import kotlinx.android.synthetic.main.rider_row_item.view.phoneTextView
 
@@ -14,6 +15,7 @@ class RidersRecyclerViewAdapter(var riderList: List<Rider>) : RecyclerView.Adapt
 
     interface Listener {
         fun onRiderClick(rider: Rider)
+        fun onConfirmRideClick(rider: Rider)
     }
 
     fun updateRiders(newRiderList: List<Rider>) {
@@ -48,6 +50,9 @@ class RidersRecyclerViewAdapter(var riderList: List<Rider>) : RecyclerView.Adapt
             //TODO: show distance on cell : itemView.distanceTextView.text = rider
             itemView.setOnClickListener {
                 listener?.onRiderClick(rider)
+            }
+            itemView.confirmRideButton.setOnClickListener {
+                listener?.onConfirmRideClick(rider)
             }
         }
     }

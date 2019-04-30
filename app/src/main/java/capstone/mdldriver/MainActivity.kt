@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -29,17 +30,19 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.PolylineOptions
 import kotlinx.android.synthetic.main.activity_main.refreshButton
 import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
-import kotlinx.android.synthetic.main.marker_layout.confirmRideButton
-import kotlinx.android.synthetic.main.marker_layout.view.confirmRideButton
 import kotlinx.android.synthetic.main.marker_layout.view.nameTextView
 import kotlinx.android.synthetic.main.marker_layout.view.snippetTextView
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 
@@ -63,6 +66,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", capstone.mdldriver.Location("house", "McNallys", Coordinates(38.9506438, -92.3290139)) )
     private val fakeRider4 = Rider("12235", 4, true, "Lily", "2323734", capstone.mdldriver.Location("house", "Harpos", Coordinates(38.9506438, -92.3290139)) )
 
+    private var currentRider: Rider? = null
+
     private lateinit var adapter: RidersRecyclerViewAdapter
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var driverName: String
@@ -83,6 +88,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         val latitude = location.latitude
         latLng = LatLng(latitude, longitude)
         //TODO: update driver on server so rider client can see where the driver is now
+        //TODO:
     }
     override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {
         Log.e(TAG, "onStatusChanged")
@@ -97,6 +103,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     override fun onRiderClick(rider: Rider) {
         //When recylerview item is clicked, go to rider location on map and show route
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat, rider.location.coordinates.long), zoom))
+    }
+
+    override fun onConfirmRideClick(rider: Rider) {
+        Toast.makeText(this, "confirmed", Toast.LENGTH_SHORT).show()
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -121,8 +131,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             setRiderLocations()
         }
 
-        //addMarker()
-
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         //TODO check for permissions here
@@ -143,6 +151,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     private fun insertNewActiveDriver() {
+        val handler = Handler(Looper.getMainLooper())
+
         val url: HttpUrl = baseUrl.newBuilder("insertDriver")!!
                 .addQueryParameter("active", "true")
                 .addQueryParameter("latitude", "38.822057")
@@ -155,11 +165,19 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         val request: Request = Request.Builder().url(url).build()
         httpClient.newCall(request).enqueue(object: Callback {
             override fun onFailure(call: Call?, e: IOException?) {
-                Log.e(TAG, "insert driver call failure:" + e.toString())
+                handler.post{
+                    Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
+                }
             }
 
             override fun onResponse(call: Call?, response: Response?) {
                 Log.e(TAG, "insert driver response: " + response?.body()!!.string())
+                val jsonString = response.body()!!.string().toString()
+                if (!isJSONValid(jsonString)){
+                    handler.post{
+                        Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
+                    }
+                }
             }
 
         })
@@ -189,47 +207,54 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 override fun onFailure(call: Call?, e: IOException?) {
                     Log.e(TAG, "nearby riders call failure:" + e.toString() + " call: " + call.toString())
                     handler.post { //UI manipulation must be ran on Main thread
-                        //TODO error
+                        Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
                     }
                 }
 
                 override fun onResponse(call: Call?, response: Response?) {
                     val jsonString = response!!.body()!!.string().toString()
-                    val jsonObject = JSONObject(jsonString)
-                    Log.v(TAG, "jsonResponse:$jsonObject")
-                    val jsonArray = jsonObject.getJSONArray("riders")
-                    val updatedRiders = mutableListOf<Rider>()
-                    for(i in 0 until jsonArray.length()) {
-                        val riderJSONObject = jsonArray.getJSONObject(i)
-                        val _id = riderJSONObject.getString("_id")
-                        val id = riderJSONObject.optInt("id") //backend allows to ignore this so it might not be in the response
-                        val active = riderJSONObject.getBoolean("active")
-                        val name = riderJSONObject.getString("name")
-                        val phone = riderJSONObject.getString("phone")
-                        val locationJSONObject = riderJSONObject.getJSONObject("location")
-                        val locationType = locationJSONObject.getString("type")
-                        val locationAddress = locationJSONObject.getString("address")
-                        val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
-                        val locationLat = locationCoordinatesJSONArray.getDouble(1)
-                        val locationLong = locationCoordinatesJSONArray.getDouble(0)
-                        val coords = Coordinates(locationLat, locationLong)
+                    if (isJSONValid(jsonString)) {
+                        val jsonObject = JSONObject(jsonString)
+                        Log.v(TAG, "jsonResponse:$jsonObject")
+                        val jsonArray = jsonObject.getJSONArray("riders")
+                        val updatedRiders = mutableListOf<Rider>()
+                        for (i in 0 until jsonArray.length()) {
+                            val riderJSONObject = jsonArray.getJSONObject(i)
+                            val _id = riderJSONObject.getString("_id")
+                            val id = riderJSONObject.optInt("id") //backend allows to ignore this so it might not be in the response
+                            val active = riderJSONObject.getBoolean("active")
+                            val name = riderJSONObject.getString("name")
+                            val phone = riderJSONObject.getString("phone")
+                            val locationJSONObject = riderJSONObject.getJSONObject("location")
+                            val locationType = locationJSONObject.getString("type")
+                            val locationAddress = locationJSONObject.getString("address")
+                            val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
+                            val locationLat = locationCoordinatesJSONArray.getDouble(1)
+                            val locationLong = locationCoordinatesJSONArray.getDouble(0)
+                            val coords = Coordinates(locationLat, locationLong)
 
-                        updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, coords))
-                    }
+                            updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, coords))
+                        }
 
-                    handler.post { //UI manipulation must be ran on Main thread
-                        adapter.updateRiders(updatedRiders)
+                        handler.post {
+                            //UI manipulation must be ran on Main thread
+                            adapter.updateRiders(updatedRiders)
 
-                        updatedRiders.forEach {
-                            if (it.active) {
-                                map?.addMarker(MarkerOptions()
-                                        .position(LatLng(it.location.coordinates.lat, it.location.coordinates.long))
-                                        .title(it.location.address)
-                                        .snippet(it.phone + "\n" + it.name))
+                            updatedRiders.forEach {
+                                if (it.active) {
+                                    map?.addMarker(MarkerOptions()
+                                            .position(LatLng(it.location.coordinates.lat, it.location.coordinates.long))
+                                            .title(it.location.address)
+                                            .snippet(it.phone + "\n" + it.name))
+                                }
                             }
                         }
-                    }
 
+                    } else {
+                        handler.post{
+                            Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
 
             })
@@ -237,6 +262,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         }}catch (ex: SecurityException) {
             Log.e(TAG, ex.toString())
         }
+    }
+
+    private fun rideConfirmed() {
+
     }
 
     /**
@@ -250,14 +279,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
      */
 
     override fun onMapReady(googleMap: GoogleMap?) {
-        Log.e(TAG, "onmapready")
         map = googleMap
-
-        map!!.setOnInfoWindowClickListener {
-            Toast.makeText(this@MainActivity, "Boop", Toast.LENGTH_SHORT).show()
-            //TODO: show route, confirm ride to server, show eta, change screen and add finished ride button
-        }
-
         map!!.setInfoWindowAdapter(object : GoogleMap.InfoWindowAdapter {
             override fun getInfoContents(marker: Marker?) = null
 
@@ -271,7 +293,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             }
 
         })
-
 
         if ( checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // ask for permissions
@@ -348,6 +369,51 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         // Building the url to the web service
 
         return "https://maps.googleapis.com/maps/api/directions/$output?$parameters"
+    }
+
+    // draws path from result String
+    private fun drawPath(result: String) {
+    try {
+        //Tranform the string into a json object
+        val json = JSONObject(result)
+        val routeArray = json.getJSONArray("routes")
+        val routes = routeArray.getJSONObject(0)
+        val overviewPolylines = routes.getJSONObject("overview_polyline")
+        val encodedString = overviewPolylines.getString("points")
+        val list = decodePoly(encodedString)
+    }
+    catch (ex: JSONException) {
+        //TODO handle error
+    }
+}
+
+    private fun decodePoly(encoded: String): List<LatLng> {
+
+        val poly = emptyList<LatLng>()
+        val index: Int = 0
+        val len = encoded.length
+        val lat = 0
+        val lng = 0
+
+    return poly
+}
+
+    //Helper to check if network response is correct or an error
+    fun isJSONValid(test: String): Boolean {
+        try {
+            JSONObject(test)
+        } catch (ex: JSONException) {
+            // edited, to include @Arthur's comment
+            // e.g. in case JSONArray is valid as well...
+            try {
+                JSONArray(test)
+            } catch (ex1: JSONException) {
+                return false
+            }
+
+        }
+
+        return true
     }
 
 

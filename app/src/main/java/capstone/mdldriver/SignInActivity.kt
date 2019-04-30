@@ -2,6 +2,7 @@ package capstone.mdldriver
 
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
+import android.text.Editable
 import android.widget.Toast
 import kotlinx.android.synthetic.main.sigin_activity.nameTextView
 import kotlinx.android.synthetic.main.sigin_activity.phoneTextView
@@ -12,6 +13,9 @@ class SignInActivity: AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.sigin_activity)
+
+        fillInFieldsForTesting() //testing only
+
         singInButton.setOnClickListener {
             //TODO: facebook/google sign in with Oauth
             //TODO: socket to join event. does starting the app profucve a join event oin the server?
@@ -23,5 +27,11 @@ class SignInActivity: AppCompatActivity() {
                 startActivity(MainActivity.intent(this, nameTextView.text.toString(), phoneTextView.text.toString()))
             }
         }
+        singInButton.callOnClick()
+    }
+
+    private fun fillInFieldsForTesting() {
+        nameTextView.text = Editable.Factory.getInstance().newEditable("Jonas")
+        phoneTextView.text = Editable.Factory.getInstance().newEditable("5555555555")
     }
 }
