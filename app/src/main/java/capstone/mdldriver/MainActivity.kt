@@ -65,8 +65,12 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private val fakeRider2 = Rider("1223", 2, true, "Bobert", "23234234", capstone.mdldriver.Location("house", "Carlitos", Coordinates(38.716730, -90.499642)) )
     private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", capstone.mdldriver.Location("house", "McNallys", Coordinates(38.9506438, -92.3290139)) )
     private val fakeRider4 = Rider("12235", 4, true, "Lily", "2323734", capstone.mdldriver.Location("house", "Harpos", Coordinates(38.9506438, -92.3290139)) )
+    private val fakeRiderList = listOf(fakeRider1, fakeRider2, fakeRider3, fakeRider4)
+    private val useFakeData = true //Toggle to true to use above rider data instead of network data, MAKE SURE IT STAYS FALSE ON MASTER: TESTING PURPOSES ONLY
+
 
     private var currentRider: Rider? = null
+    private var currentlyOnARide = false
 
     private lateinit var adapter: RidersRecyclerViewAdapter
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -90,18 +94,13 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         //TODO: update driver on server so rider client can see where the driver is now
         //TODO:
     }
-    override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {
-        Log.e(TAG, "onStatusChanged")
-    }
-    override fun onProviderEnabled(provider: String) {
-        Log.e(TAG, "onProviderEnabled")
-    }
-    override fun onProviderDisabled(provider: String) {
-        Log.e(TAG, "onProviderDisabled: " + provider)
-    }
+    override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {}
+    override fun onProviderEnabled(provider: String) {}
+    override fun onProviderDisabled(provider: String) {}
 
     override fun onRiderClick(rider: Rider) {
         //When recylerview item is clicked, go to rider location on map and show route
+        Log.e(TAG, "rider clicked: " + rider.toString())
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat, rider.location.coordinates.long), zoom))
     }
 
@@ -132,6 +131,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        centerMapOnDriver()
 
         //TODO check for permissions here
 
@@ -151,57 +151,81 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     private fun insertNewActiveDriver() {
-        val handler = Handler(Looper.getMainLooper())
 
-        val url: HttpUrl = baseUrl.newBuilder("insertDriver")!!
-                .addQueryParameter("active", "true")
-                .addQueryParameter("latitude", "38.822057")
-                .addQueryParameter("longitude", "-90.700158")
-                .addQueryParameter("name", driverName)
-                .addQueryParameter("phone", driverPhone)
-                .build()
+        if (!useFakeData) { //If we are testing with fake data, dont bother to insert the driver
+            val handler = Handler(Looper.getMainLooper())
 
-
-        val request: Request = Request.Builder().url(url).build()
-        httpClient.newCall(request).enqueue(object: Callback {
-            override fun onFailure(call: Call?, e: IOException?) {
-                handler.post{
-                    Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
-                }
-            }
-
-            override fun onResponse(call: Call?, response: Response?) {
-                Log.e(TAG, "insert driver response: " + response?.body()!!.string())
-                val jsonString = response.body()!!.string().toString()
-                if (!isJSONValid(jsonString)){
-                    handler.post{
-                        Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-
-        })
-    }
-
-    private fun centerMapOnDriver() {
-        latLng?.let {
-            map?.moveCamera(CameraUpdateFactory.newLatLngZoom(it, zoom))
-        }
-    }
-
-    private fun setRiderLocations() {
-
-        try {
-            fusedLocationClient.lastLocation.addOnSuccessListener {
-                onLocationChanged(it)
-            val url: HttpUrl = baseUrl.newBuilder("nearbyRiders")!!
-                    .addQueryParameter("latitude", it.latitude.toString())
-                    .addQueryParameter("longitude", it.longitude.toString())
+            val url: HttpUrl = baseUrl.newBuilder("insertDriver")!!
+                    .addQueryParameter("active", "true")
+                    .addQueryParameter("latitude", "38.822057")
+                    .addQueryParameter("longitude", "-90.700158")
+                    .addQueryParameter("name", driverName)
+                    .addQueryParameter("phone", driverPhone)
                     .build()
 
 
             val request: Request = Request.Builder().url(url).build()
-            val handler = Handler(Looper.getMainLooper())
+            httpClient.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call?, e: IOException?) {
+                    handler.post {
+                        Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                override fun onResponse(call: Call?, response: Response?) {
+                    val jsonString = response?.body()!!.string()
+                    if (!isJSONValid(jsonString)) {
+                        handler.post {
+                            Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+
+            })
+        }
+    }
+
+    private fun centerMapOnDriver() {
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener {
+                onLocationChanged(it)
+                latLng?.let {
+                    map?.moveCamera(CameraUpdateFactory.newLatLngZoom(it, zoom))
+                }
+            }
+        } catch (ex: SecurityException) {
+            Log.e(TAG, "Security Exception: " + ex)
+        }
+    }
+
+    private fun setRiderLocations() {
+        val handler = Handler(Looper.getMainLooper())
+        if (useFakeData) {
+            handler.post {
+                //UI manipulation must be ran on Main thread
+                adapter.updateRiders(fakeRiderList)
+
+                fakeRiderList.forEach {
+                    if (it.active) {
+                        map?.addMarker(MarkerOptions()
+                            .position(LatLng(it.location.coordinates.lat, it.location.coordinates.long))
+                            .title(it.location.address)
+                            .snippet(it.phone + "\n" + it.name))
+                    }
+                }
+            }
+            return
+        }
+
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener {
+                onLocationChanged(it)
+                val url: HttpUrl = baseUrl.newBuilder("nearbyRiders")!!
+                    .addQueryParameter("latitude", it.latitude.toString())
+                    .addQueryParameter("longitude", it.longitude.toString())
+                    .build()
+
+            val request: Request = Request.Builder().url(url).build()
 
             httpClient.newCall(request).enqueue( object: Callback {
                 override fun onFailure(call: Call?, e: IOException?) {
@@ -280,6 +304,9 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     override fun onMapReady(googleMap: GoogleMap?) {
         map = googleMap
+
+        centerMapOnDriver()
+
         map!!.setInfoWindowAdapter(object : GoogleMap.InfoWindowAdapter {
             override fun getInfoContents(marker: Marker?) = null
 
@@ -313,14 +340,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, DRIVER_LOCATION_DEBOUNCE_MILLS, 0f, this)
         } catch (ex: SecurityException) {
             Log.e(TAG, "SEC EX")
-        }
-
-        try {
-            fusedLocationClient.lastLocation.addOnSuccessListener {
-                centerMapOnDriver()
-            }
-        } catch (ex: SecurityException) {
-            Log.e(TAG, "Security Exception")
         }
     }
 
