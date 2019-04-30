@@ -66,7 +66,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", capstone.mdldriver.Location("house", "McNallys", Coordinates(38.9506438, -92.3290139)) )
     private val fakeRider4 = Rider("12235", 4, true, "Lily", "2323734", capstone.mdldriver.Location("house", "Harpos", Coordinates(38.9506438, -92.3290139)) )
     private val fakeRiderList = listOf(fakeRider1, fakeRider2, fakeRider3, fakeRider4)
-    private val useFakeData = true //Toggle to true to use above rider data instead of network data, MAKE SURE IT STAYS FALSE ON MASTER: TESTING PURPOSES ONLY
+    private val useFakeData = false //Toggle to true to use above rider data instead of network data, MAKE SURE IT STAYS FALSE ON MASTER: TESTING PURPOSES ONLY
 
 
     private var currentRider: Rider? = null
@@ -120,7 +120,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     override fun onConfirmRideClick(rider: Rider) {
-        socket.emit("ride-accepted", rider._id) //TODO: need to emit the ObjectID (Not userid) of rider, think this is correct
+        socket.emit("ride-accepted", rider._id)
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat, rider.location.coordinates.long), zoom))
         currentRider = rider
         currentlyOnARide = true
         Toast.makeText(this, "Confirmed", Toast.LENGTH_SHORT).show()
@@ -140,10 +141,18 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
 
         val onNewRideRequest = Emitter.Listener {
+            //TODO make sure this is right and remove listener in ondestory
             setRiderLocations()
         }
 
-        socket.on("rider added", onNewRideRequest) //TODO make sure this is right and remove listener in ondestory
+        val onRideRequestAccepted = Emitter.Listener {
+            //TODO make sure this is right and remove listener in ondestory
+            setRiderLocations()
+        }
+
+        socket.on("request-for-ride", onNewRideRequest) //Listen for new ride requests and update queue accordingly
+        socket.on("ride-accepted", onRideRequestAccepted) //Listen for when a ride is accepted to remove it from your queue if you did not take it
+
 
         //TODO: add driver side tab, figure out /insertDriver
 
@@ -159,7 +168,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
             if (currentlyOnARide) {
                 //End Ride
                 currentlyOnARide = false
-                socket.emit("ride-completed", currentRider?._id)
+                socket.emit("ride-completed", currentRider?._id) //Tell backend the ride is done, marking it as complete
                 currentRider = null
             }
             setRiderLocations()
@@ -238,6 +247,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     private fun setRiderLocations() {
         val handler = Handler(Looper.getMainLooper())
+        map?.clear()
         if (useFakeData) {
             handler.post {
                 //UI manipulation must be ran on Main thread
