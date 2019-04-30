@@ -22,6 +22,7 @@ import android.support.v4.content.ContextCompat.checkSelfPermission
 import android.support.v7.app.AlertDialog
 import android.view.View
 import android.widget.Toast
+import com.github.nkzawa.emitter.Emitter
 import com.github.nkzawa.socketio.client.IO
 import com.github.nkzawa.socketio.client.Socket
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -71,15 +72,15 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private var currentRider: Rider? = null
     private var currentlyOnARide = false
         set(value) {
-            Log.e(TAG, "currentlyOnaRide being set to: " + value)
+            Log.v(TAG, "currentlyOnaRide being set to: " + value)
             if (!value) {
                 //make it the refresh button and recyclerview
-                cancelOrRefreshButton.text = "Refresh Riders"
+                cancelOrRefreshButton.text = getString(R.string.refresh_riders)
                 ridersRecyclerView.visibility = View.VISIBLE
                 etaTextView.visibility = View.GONE
             } else {
                 //make it ride complete button and eta and map
-                cancelOrRefreshButton.text = "Complete Ride"
+                cancelOrRefreshButton.text = getString(R.string.complete_ride)
                 ridersRecyclerView.visibility = View.GONE
                 etaTextView.visibility = View.VISIBLE
         }
@@ -136,9 +137,15 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
         insertNewActiveDriver()
 
-        //TODO: socket.on("rider added", onRiderAdded)   update recycyclerview
 
-        //TODO: add driver side tab, figure out /insertDriver shit
+
+        val onNewRideRequest = Emitter.Listener {
+            setRiderLocations()
+        }
+
+        socket.on("rider added", onNewRideRequest) //TODO make sure this is right and remove listener in ondestory
+
+        //TODO: add driver side tab, figure out /insertDriver
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
@@ -154,18 +161,14 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 currentlyOnARide = false
                 socket.emit("ride-completed", currentRider?._id)
                 currentRider = null
-            } else {
-                setRiderLocations()
             }
-
+            setRiderLocations()
         }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         centerMapOnDriver()
 
         //TODO check for permissions here
-
-        //addMarker() here to try and add backend coord, not wokring
 
         setRiderLocations()
     }
@@ -177,6 +180,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     override fun onDestroy() {
         super.onDestroy()
+        socket.disconnect()
+        //TODO: Emit a driver done event before disconnect
         //TODO: update driver as no longer taking riders on the server
     }
 

@@ -6,4 +6,6 @@
     <string name="title_location_permission">Location Access Required</string>
     <string name="text_location_permission">We need your location to route you correctly</string>
     <string name="ok">Okay</string>
+    <string name="refresh_riders">Refresh Riders</string>
+    <string name="complete_ride">Complete Ride</string>
 </resources>
