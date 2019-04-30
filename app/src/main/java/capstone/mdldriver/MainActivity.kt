@@ -61,10 +61,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private val zoom = 16.0f
 
     //Test data if you need it
-    private val fakeRider1 = Rider("123", 1, true, "Jon", "55234234", capstone.mdldriver.Location("house", "McDondalds", Coordinates(38.816730, -90.699642)) )
-    private val fakeRider2 = Rider("1223", 2, true, "Bobert", "23234234", capstone.mdldriver.Location("house", "Carlitos", Coordinates(38.716730, -90.499642)) )
-    private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", capstone.mdldriver.Location("house", "McNallys", Coordinates(38.9506438, -92.3290139)) )
-    private val fakeRider4 = Rider("12235", 4, true, "Lily", "2323734", capstone.mdldriver.Location("house", "Harpos", Coordinates(38.9506438, -92.3290139)) )
+    private val fakeRider1 = Rider("123", 1, true, "Jon", "55234234", 38.816730, -90.699642 ,"6 Fyfer Place")
+    private val fakeRider2 = Rider("1223", 2, true, "Bobert", "23234234", 38.716730, -90.499642,"400 North 9th Street" )
+    private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", 38.9506438, -92.3290139 ,"413 North 9th Street")
+    private val fakeRider4 = Rider("12235", 4, true, "Lily", "2323734", 38.9506438, -92.3290139, "415 North 9th Street" )
     private val fakeRiderList = listOf(fakeRider1, fakeRider2, fakeRider3, fakeRider4)
     private val useFakeData = false //Toggle to true to use above rider data instead of network data, MAKE SURE IT STAYS FALSE ON MASTER: TESTING PURPOSES ONLY
 
@@ -72,7 +72,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private var currentRider: Rider? = null
     private var currentlyOnARide = false
         set(value) {
-            Log.v(TAG, "currentlyOnaRide being set to: " + value)
             if (!value) {
                 //make it the refresh button and recyclerview
                 cancelOrRefreshButton.text = getString(R.string.refresh_riders)
@@ -116,12 +115,12 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     override fun onRiderClick(rider: Rider) {
         //When recylerview item is clicked, go to rider location on map and show route
         Log.e(TAG, "rider clicked: " + rider.toString())
-        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat, rider.location.coordinates.long), zoom))
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.lat, rider.long), zoom))
     }
 
     override fun onConfirmRideClick(rider: Rider) {
         socket.emit("ride-accepted", rider._id)
-        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.location.coordinates.lat, rider.location.coordinates.long), zoom))
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.lat, rider.long), zoom))
         currentRider = rider
         currentlyOnARide = true
         Toast.makeText(this, "Confirmed", Toast.LENGTH_SHORT).show()
@@ -256,9 +255,9 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 fakeRiderList.forEach {
                     if (it.active) {
                         map?.addMarker(MarkerOptions()
-                            .position(LatLng(it.location.coordinates.lat, it.location.coordinates.long))
-                            .title(it.location.address)
-                            .snippet(it.phone + "\n" + it.name))
+                            .position(LatLng(it.lat, it.long))
+                            .title(it.name)
+                            .snippet(it.phone))
                     }
                 }
             }
@@ -298,14 +297,13 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                             val name = riderJSONObject.getString("name")
                             val phone = riderJSONObject.getString("phone")
                             val locationJSONObject = riderJSONObject.getJSONObject("location")
-                            val locationType = locationJSONObject.getString("type")
+                            val locationType = locationJSONObject.getString("type") //TODO: utilize type
                             val locationAddress = locationJSONObject.getString("address")
                             val locationCoordinatesJSONArray = locationJSONObject.getJSONArray("coordinates")
                             val locationLat = locationCoordinatesJSONArray.getDouble(1)
                             val locationLong = locationCoordinatesJSONArray.getDouble(0)
-                            val coords = Coordinates(locationLat, locationLong)
 
-                            updatedRiders += Rider(_id, id, active, name, phone, Location(locationType, locationAddress, coords))
+                            updatedRiders += Rider(_id, id, active, name, phone, locationLat, locationLong, locationAddress)
                         }
 
                         handler.post {
@@ -315,9 +313,9 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                             updatedRiders.forEach {
                                 if (it.active) {
                                     map?.addMarker(MarkerOptions()
-                                            .position(LatLng(it.location.coordinates.lat, it.location.coordinates.long))
-                                            .title(it.location.address)
-                                            .snippet(it.phone + "\n" + it.name))
+                                            .position(LatLng(it.lat, it.long))
+                                            .title(it.name)
+                                            .snippet(it.phone))
                                 }
                             }
                         }

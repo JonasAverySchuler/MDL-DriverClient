@@ -45,7 +45,7 @@ class RidersRecyclerViewAdapter(var riderList: List<Rider>) : RecyclerView.Adapt
 
         fun bindItems(rider: Rider) {
             itemView.nameTextView.text = rider.name
-            itemView.addressTextView.text = rider.location.address
+            itemView.addressTextView.text = rider.destinationAddress
             itemView.phoneTextView.text = rider.phone
             //TODO: show distance on cell : itemView.distanceTextView.text = rider
             itemView.setOnClickListener {
