@@ -24,6 +24,8 @@ import android.support.v7.app.AlertDialog
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import com.github.nkzawa.socketio.client.IO
+import com.github.nkzawa.socketio.client.Socket
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -76,6 +78,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var driverName: String
     private lateinit var driverPhone: String
+    private lateinit var socket: Socket
 
     companion object {
         fun intent(context: Context, name: String, phone: String): Intent {
@@ -105,7 +108,11 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     override fun onConfirmRideClick(rider: Rider) {
-        Toast.makeText(this, "confirmed", Toast.LENGTH_SHORT).show()
+        socket.emit("ride-accepted", rider._id) //TODO: need to emit the ObjectID (Not userid) of rider, think this is correct
+        currentRider = rider
+        Toast.makeText(this, "Confirmed", Toast.LENGTH_SHORT).show()
+
+        //Switch UI to on  a ride
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,6 +120,9 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
         driverName = intent.getStringExtra(DRIVER_NAME_EXTRA_STRING)
         driverPhone = intent.getStringExtra(DRIVER_PHONE_EXTRA_STRING)
+
+        socket = IO.socket("http://jl-m.org:8000") //Initialize socket
+        socket.connect()
 
         insertNewActiveDriver()
 
@@ -422,16 +432,12 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         try {
             JSONObject(test)
         } catch (ex: JSONException) {
-            // edited, to include @Arthur's comment
-            // e.g. in case JSONArray is valid as well...
             try {
                 JSONArray(test)
             } catch (ex1: JSONException) {
                 return false
             }
-
         }
-
         return true
     }
 
