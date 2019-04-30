@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -22,7 +21,6 @@ import android.support.v4.app.FragmentActivity
 import android.support.v4.content.ContextCompat.checkSelfPermission
 import android.support.v7.app.AlertDialog
 import android.view.View
-import android.widget.TextView
 import android.widget.Toast
 import com.github.nkzawa.socketio.client.IO
 import com.github.nkzawa.socketio.client.Socket
@@ -32,14 +30,13 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
-import com.google.android.gms.maps.model.PolylineOptions
-import kotlinx.android.synthetic.main.activity_main.refreshButton
+import kotlinx.android.synthetic.main.activity_main.cancelOrRefreshButton
+import kotlinx.android.synthetic.main.activity_main.etaTextView
 import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
 import kotlinx.android.synthetic.main.marker_layout.view.nameTextView
 import kotlinx.android.synthetic.main.marker_layout.view.snippetTextView
 import okhttp3.Call
 import okhttp3.Callback
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -73,6 +70,21 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     private var currentRider: Rider? = null
     private var currentlyOnARide = false
+        set(value) {
+            Log.e(TAG, "currentlyOnaRide being set to: " + value)
+            if (!value) {
+                //make it the refresh button and recyclerview
+                cancelOrRefreshButton.text = "Refresh Riders"
+                ridersRecyclerView.visibility = View.VISIBLE
+                etaTextView.visibility = View.GONE
+            } else {
+                //make it ride complete button and eta and map
+                cancelOrRefreshButton.text = "Complete Ride"
+                ridersRecyclerView.visibility = View.GONE
+                etaTextView.visibility = View.VISIBLE
+        }
+            field = value
+        }
 
     private lateinit var adapter: RidersRecyclerViewAdapter
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -94,8 +106,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         val longitude = location.longitude
         val latitude = location.latitude
         latLng = LatLng(latitude, longitude)
-        //TODO: update driver on server so rider client can see where the driver is now
-        //TODO:
+        socket.emit("driver-movement", latLng) //TODO check if this is correct
     }
     override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {}
     override fun onProviderEnabled(provider: String) {}
@@ -110,9 +121,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     override fun onConfirmRideClick(rider: Rider) {
         socket.emit("ride-accepted", rider._id) //TODO: need to emit the ObjectID (Not userid) of rider, think this is correct
         currentRider = rider
+        currentlyOnARide = true
         Toast.makeText(this, "Confirmed", Toast.LENGTH_SHORT).show()
-
-        //Switch UI to on  a ride
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,6 +136,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
         insertNewActiveDriver()
 
+        //TODO: socket.on("rider added", onRiderAdded)   update recycyclerview
+
         //TODO: add driver side tab, figure out /insertDriver shit
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
@@ -136,8 +148,16 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         adapter.listener = this
         ridersRecyclerView.adapter = adapter
 
-        refreshButton.setOnClickListener {
-            setRiderLocations()
+        cancelOrRefreshButton.setOnClickListener {
+            if (currentlyOnARide) {
+                //End Ride
+                currentlyOnARide = false
+                socket.emit("ride-completed", currentRider?._id)
+                currentRider = null
+            } else {
+                setRiderLocations()
+            }
+
         }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -188,6 +208,9 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                         handler.post {
                             Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
                         }
+                    } else {
+                        //TODO: get driver id and emit join event to socket
+                        //socket.emit("join", driverid)
                     }
                 }
 

@@ -35,14 +35,29 @@
         />
 
     <Button
-        android:id="@+id/refreshButton"
+        android:id="@+id/cancelOrRefreshButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:padding="5dp"
+        android:layout_margin="10dp"
         android:background="@android:color/holo_green_dark"
         android:text="Refresh Riders"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toTopOf="@id/ridersRecyclerView"
+        />
+
+    <TextView
+        android:id="@+id/etaTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="5dp"
+        android:background="@color/colorPrimaryDark"
+        android:text="ETA: 4mins"
+        android:textSize="20sp"
+        android:layout_margin="10dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:textColor="@color/white"
         />
 
 </android.support.constraint.ConstraintLayout>
