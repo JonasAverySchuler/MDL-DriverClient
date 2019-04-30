@@ -114,7 +114,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     override fun onRiderClick(rider: Rider) {
         //When recylerview item is clicked, go to rider location on map and show route
-        Log.e(TAG, "rider clicked: " + rider.toString())
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.lat, rider.long), zoom))
         showPath(rider)
     }
@@ -337,7 +336,36 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     }
 
     private fun showPath(rider: Rider) {
-        Log.e(TAG, getDirectionsUrl(LatLng(rider.lat, rider.long), rider.destinationAddress))
+
+        val url: HttpUrl = HttpUrl.get(getDirectionsUrl(LatLng(rider.lat, rider.long), rider.destinationAddress))
+                .newBuilder()
+                .addQueryParameter("key","AIzaSyAGYXAa5fpZnEMVBZ4Vscuu_H3jnkJpxHw").build()
+
+        val handler = Handler(Looper.getMainLooper())
+
+        val request: Request = Request.Builder().url(url).build()
+        httpClient.newCall(request).enqueue(object: Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e(TAG, "showPath call failure: " + e.toString())
+                handler.post {
+                    Toast.makeText(this@MainActivity, "Network Error: Cannot show path", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val jsonString = response.body()!!.string().toString()
+                if (isJSONValid(jsonString)) {
+                    val jsonObject = JSONObject(jsonString)
+                    
+                    Log.e(TAG, jsonString)
+                    //TODO draw polyline from this data
+                } else {
+                    //TODO: error
+                }
+            }
+
+        })
+
     }
     /**
      * Manipulates the map once available.
@@ -421,7 +449,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         val str_origin = "origin=" + origin.latitude + "," + origin.longitude
 
         // Destination of route
-        val str_dest = "destination=" + String
+        val str_dest = "destination=" + dest
 
         // Sensor enabled
         val sensor = "sensor=false"
