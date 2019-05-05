@@ -52,7 +52,7 @@
         android:layout_height="wrap_content"
         android:padding="5dp"
         android:background="@color/colorPrimaryDark"
-        android:text="ETA: 4mins"
+        android:text="@string/ride_length_formatted"
         android:textSize="20sp"
         android:layout_margin="10dp"
         app:layout_constraintStart_toStartOf="parent"

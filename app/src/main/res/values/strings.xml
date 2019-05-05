@@ -8,4 +8,5 @@
     <string name="ok">Okay</string>
     <string name="refresh_riders">Refresh Riders</string>
     <string name="complete_ride">Complete Ride</string>
+    <string name="ride_length_formatted">Estimated ride time: %d minutes</string>
 </resources>

@@ -32,6 +32,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
 import kotlinx.android.synthetic.main.activity_main.cancelOrRefreshButton
 import kotlinx.android.synthetic.main.activity_main.etaTextView
@@ -61,6 +62,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private var riders: List<Rider> = emptyList()
     private val httpClient = OkHttpClient.Builder().build()
     private val zoom = 16.0f
+    private var polyline : Polyline? = null
 
     //Test data if you need it
     private val fakeRider1 = Rider("123", 1, true, "Jon", "55234234", 38.950732, -92.3290123 ,"6 Fyfer Place")
@@ -68,7 +70,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private val fakeRider3 = Rider("1234", 3, true, "Marco", "55234244", 38.9506438, -92.3290119 ,"413 North 9th Street")
     private val fakeRider4 = Rider("12235", 4, true, "Lily", "2323734", 38.9506438, -92.3290189, "415 North 9th Street" )
     private val fakeRiderList = listOf(fakeRider1, fakeRider2, fakeRider3, fakeRider4)
-    private val useFakeData = true //Toggle to true to use above rider data instead of network data, MAKE SURE IT STAYS FALSE ON MASTER: TESTING PURPOSES ONLY
+    private val useFakeData = false //Toggle to true to use above rider data instead of network data, MAKE SURE IT STAYS FALSE ON MASTER: TESTING PURPOSES ONLY
 
 
     private var currentRider: Rider? = null
@@ -117,6 +119,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     override fun onRiderClick(rider: Rider) {
         //When recylerview item is clicked, go to rider location on map and show route
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.lat, rider.long), zoom))
+        polyline?.remove()
         showPath(rider)
     }
 
@@ -126,7 +129,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         currentRider = rider
         currentlyOnARide = true
         showPath(rider)
-        Toast.makeText(this, "Confirmed", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Confirmed", Toast.LENGTH_SHORT).show() //TODO: custom toast?
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -360,7 +363,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 if (isJSONValid(jsonString)) {
                     //Get polyline data from json result
                     val jsonObject = JSONObject(jsonString)
-                    var routes: List<List<HashMap<String,String>>> = parser.parse(jsonObject)
+                    val routes: List<List<HashMap<String,String>>> = parser.parse(jsonObject)
                     var points: ArrayList<LatLng>
                     var lineOptions: PolylineOptions? = null
 
@@ -393,7 +396,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                     // Drawing polyline in the Google Map for the i-th route
                     if (lineOptions != null) {
                         handler.post{
-                            map!!.addPolyline(lineOptions)
+                            polyline?.remove()
+                            polyline = map!!.addPolyline(lineOptions)
+
+
                         }
                     } else {
                         Log.d(TAG, "polyline draw error")
