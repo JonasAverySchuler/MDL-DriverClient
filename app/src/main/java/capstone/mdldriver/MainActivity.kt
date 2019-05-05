@@ -34,6 +34,7 @@ import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
+import com.google.maps.android.SphericalUtil
 import kotlinx.android.synthetic.main.activity_main.cancelOrRefreshButton
 import kotlinx.android.synthetic.main.activity_main.etaTextView
 import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
@@ -120,6 +121,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
         //When recylerview item is clicked, go to rider location on map and show route
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(rider.lat, rider.long), zoom))
         polyline?.remove()
+        etaTextView.visibility = View.GONE
         showPath(rider)
     }
 
@@ -342,7 +344,7 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
     private fun showPath(rider: Rider) {
 
-        val url: HttpUrl = HttpUrl.get(getDirectionsUrl(LatLng(rider.lat, rider.long), rider.destinationAddress))
+        val url: HttpUrl = HttpUrl.get(getDirectionsUrl(LatLng(rider.lat, rider.long), rider.destinationAddress + "Columbia, Mo 65201")) //Adding Columbia Missouri to destination address, since this will only operate in this city
                 .newBuilder()
                 .addQueryParameter("key","AIzaSyAGYXAa5fpZnEMVBZ4Vscuu_H3jnkJpxHw").build()
 
@@ -366,6 +368,8 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                     val routes: List<List<HashMap<String,String>>> = parser.parse(jsonObject)
                     var points: ArrayList<LatLng>
                     var lineOptions: PolylineOptions? = null
+                    var startPoint: LatLng? = null
+                    var endPoint: LatLng? = null
 
                     // Traversing through all the routes
                     for (i in routes.indices) {
@@ -384,6 +388,11 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                             val position = LatLng(lat, lng)
 
                             points.add(position)
+                            if (j == 0) {
+                                startPoint = position
+                            } else if (j == path.indices.last) {
+                                endPoint = position
+                            }
                         }
 
                         // Adding all the points in the route to LineOptions
@@ -398,7 +407,13 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                         handler.post{
                             polyline?.remove()
                             polyline = map!!.addPolyline(lineOptions)
+                            startPoint?.let { start ->
+                                endPoint?.let { end ->
+                                    etaTextView.text = getString(R.string.ride_length_formatted, (SphericalUtil.computeDistanceBetween(start, end).toInt()/500).inc()) //TODO: compute a better eta formula
+                                    etaTextView.visibility = View.VISIBLE
 
+                                }
+                            }
 
                         }
                     } else {

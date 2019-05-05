@@ -58,6 +58,8 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         android:textColor="@color/white"
+
+        android:visibility="gone"
         />
 
 </android.support.constraint.ConstraintLayout>
