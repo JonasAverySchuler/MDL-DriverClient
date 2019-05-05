@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -31,6 +32,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.PolylineOptions
 import kotlinx.android.synthetic.main.activity_main.cancelOrRefreshButton
 import kotlinx.android.synthetic.main.activity_main.etaTextView
 import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
@@ -219,11 +221,11 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
                 override fun onResponse(call: Call?, response: Response?) {
                     val jsonString = response?.body()!!.string()
                     if (!isJSONValid(jsonString)) {
+                        Log.e(TAG, "insertdriver response: " + jsonString)
                         handler.post {
                             Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_LONG).show()
                         }
                     } else {
-                        //TODO: get driver id and emit join event to socket
                         //socket.emit("join", driverid)
                     }
                 }
@@ -354,13 +356,53 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
             override fun onResponse(call: Call, response: Response) {
                 val jsonString = response.body()!!.string().toString()
+                val parser = DataParser()
                 if (isJSONValid(jsonString)) {
+                    //Get polyline data from json result
                     val jsonObject = JSONObject(jsonString)
-                    
-                    Log.e(TAG, jsonString)
-                    //TODO draw polyline from this data
+                    var routes: List<List<HashMap<String,String>>> = parser.parse(jsonObject)
+                    var points: ArrayList<LatLng>
+                    var lineOptions: PolylineOptions? = null
+
+                    // Traversing through all the routes
+                    for (i in routes.indices) {
+                        points = ArrayList<LatLng>()
+                        lineOptions = PolylineOptions()
+
+                        // Fetching i-th route
+                        val path = routes[i]
+
+                        // Fetching all the points in i-th route
+                        for (j in path.indices) {
+                            val point = path[j]
+
+                            val lat = java.lang.Double.parseDouble(point["lat"])
+                            val lng = java.lang.Double.parseDouble(point["lng"])
+                            val position = LatLng(lat, lng)
+
+                            points.add(position)
+                        }
+
+                        // Adding all the points in the route to LineOptions
+                        lineOptions.addAll(points)
+                        lineOptions.width(10f)
+                        lineOptions.color(Color.RED)
+
+                    }
+
+                    // Drawing polyline in the Google Map for the i-th route
+                    if (lineOptions != null) {
+                        handler.post{
+                            map!!.addPolyline(lineOptions)
+                        }
+                    } else {
+                        Log.d(TAG, "polyline draw error")
+                    }
+
                 } else {
-                    //TODO: error
+                    handler.post {
+                        Toast.makeText(this@MainActivity, "Network Error: Cannot show path", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
 
@@ -464,33 +506,6 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
 
         return "https://maps.googleapis.com/maps/api/directions/$output?$parameters"
     }
-
-    // draws path from result String
-    private fun drawPath(result: String) {
-    try {
-        //Tranform the string into a json object
-        val json = JSONObject(result)
-        val routeArray = json.getJSONArray("routes")
-        val routes = routeArray.getJSONObject(0)
-        val overviewPolylines = routes.getJSONObject("overview_polyline")
-        val encodedString = overviewPolylines.getString("points")
-        val list = decodePoly(encodedString)
-    }
-    catch (ex: JSONException) {
-        //TODO handle error
-    }
-}
-
-    private fun decodePoly(encoded: String): List<LatLng> {
-
-        val poly = emptyList<LatLng>()
-        val index: Int = 0
-        val len = encoded.length
-        val lat = 0
-        val lng = 0
-
-    return poly
-}
 
     //Helper to check if network response is correct or an error
     fun isJSONValid(test: String): Boolean {
