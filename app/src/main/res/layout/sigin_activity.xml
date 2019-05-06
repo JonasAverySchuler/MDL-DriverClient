@@ -21,6 +21,20 @@
         app:layout_constraintTop_toTopOf="parent"
         />
 
+    <Button
+        android:id="@+id/createAccountButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+
+        android:layout_marginBottom="25dp"
+        android:padding="10dp"
+        android:background="@android:color/holo_green_dark"
+        android:text="Create account"
+        app:layout_constraintBottom_toTopOf="@id/nameTextView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        />
+
     <EditText
         android:id="@+id/nameTextView"
         android:layout_width="match_parent"
