@@ -41,7 +41,7 @@ class SignInActivity: AppCompatActivity() {
         }
 
         createAccountButton.setOnClickListener {
-            startActivity(SignUpActivity.Intent())
+            startActivity(SignUpActivity.intent(this))
         }
     }
 
