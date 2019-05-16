@@ -2,34 +2,19 @@ package capstone.mdldriver
 
 import android.content.Context
 import android.content.Intent
-import android.location.Location
-import android.location.LocationListener
 import android.os.Bundle
 import android.support.v4.app.FragmentActivity
-import android.util.Log
-import android.view.View
 import android.widget.Toast
-import com.github.nkzawa.emitter.Emitter
-import com.github.nkzawa.socketio.client.IO
-import com.github.nkzawa.socketio.client.Socket
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.Polyline
-import kotlinx.android.synthetic.main.activity_main.cancelOrRefreshButton
-import kotlinx.android.synthetic.main.activity_main.etaTextView
-import kotlinx.android.synthetic.main.activity_main.map
-import kotlinx.android.synthetic.main.activity_main.ridersRecyclerView
-import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
+import kotlinx.android.synthetic.main.signup_activity.createAccountButton
+import kotlinx.android.synthetic.main.signup_activity.displayNameEditText
+import kotlinx.android.synthetic.main.signup_activity.emailEditText
+import kotlinx.android.synthetic.main.signup_activity.passwordEditText
+import kotlinx.android.synthetic.main.signup_activity.phoneNumberEditText
 
 class SignUpActivity : FragmentActivity(){
-    private val baseUrl: HttpUrl = HttpUrl.get("http://jl-m.org:8000/")
-
+        private lateinit var auth : FirebaseAuth
 
     companion object {
         fun intent(context: Context) = Intent(context, SignUpActivity::class.java)
@@ -37,6 +22,26 @@ class SignUpActivity : FragmentActivity(){
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.signup_activity)
+        auth = FirebaseAuth.getInstance()
+        val database = FirebaseDatabase.getInstance().reference
+
+        createAccountButton.setOnClickListener {
+            if (emailEditText.text.isNullOrEmpty() || passwordEditText.text.isNullOrEmpty() || displayNameEditText.text.isNullOrEmpty() || phoneNumberEditText.text.isNullOrEmpty()) {
+                Toast.makeText(this, "Please Fill out all fields.", Toast.LENGTH_LONG).show()
+            } else {
+                auth.createUserWithEmailAndPassword(emailEditText.text.toString(), passwordEditText.text.toString()).addOnCompleteListener {
+                    if (it.isSuccessful) {
+                        val user = auth.currentUser
+                        val newDriver = Driver(user!!.uid, displayNameEditText.text.toString(), emailEditText.text.toString(), phoneNumberEditText.text.toString(), passwordEditText.text.toString())
+                        database.child("users").child(newDriver.uid).setValue(newDriver)
+                        startActivity(MainActivity.intent(this, newDriver))
+                        finish()
+                    } else {
+                        Toast.makeText(this, "Account creation failure", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
     }
 }

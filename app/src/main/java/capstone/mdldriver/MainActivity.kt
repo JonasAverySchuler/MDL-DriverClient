@@ -98,10 +98,10 @@ class MainActivity : FragmentActivity(), OnMapReadyCallback, RidersRecyclerViewA
     private lateinit var socket: Socket
 
     companion object {
-        fun intent(context: Context, name: String, phone: String): Intent {
+        fun intent(context: Context, driver: Driver): Intent {
             val intent = Intent(context, MainActivity::class.java)
-            intent.putExtra(DRIVER_NAME_EXTRA_STRING, name)
-            intent.putExtra(DRIVER_PHONE_EXTRA_STRING, phone)
+            intent.putExtra(DRIVER_NAME_EXTRA_STRING, driver.displayName)
+            intent.putExtra(DRIVER_PHONE_EXTRA_STRING, driver.phoneNumber)
             return intent
         }
     }
